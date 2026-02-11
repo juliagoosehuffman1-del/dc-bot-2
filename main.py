@@ -1,12 +1,10 @@
 import discord
 from discord.ext import commands
-from dotenv import load_dotenv
 import os
 
 # ----------------------------
 # Load bot token
 # ----------------------------
-load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # ----------------------------
