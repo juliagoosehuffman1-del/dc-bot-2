@@ -1,24 +1,37 @@
 import discord
 from discord.ext import commands
 import os
+import sys
 
-# ----------------------------
-# Load bot token
+# ---------------------------- 
+# Startup token check
 # ----------------------------
 TOKEN = os.getenv("DISCORD_TOKEN")
 
-# ----------------------------
+if not TOKEN:
+    print("❌ ERROR: DISCORD_TOKEN is not set.")
+    sys.exit(1)
+
+if TOKEN.lower().startswith("your") or " " in TOKEN:
+    print("❌ ERROR: DISCORD_TOKEN looks invalid.")
+    sys.exit(1)
+
+# ---------------------------- 
 # Setup bot
 # ----------------------------
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ---------------------------- 
+# Bot ready event
+# ----------------------------
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user} | PID: {os.getpid()}")
+    print(f"✅ Logged in as {bot.user} | PID: {os.getpid()}")
 
-# ----------------------------
+# ---------------------------- 
 # Server role IDs (who can assign roles)
 # ----------------------------
 ADMIN_ROLE_ID = 1464280949003915395
@@ -27,7 +40,7 @@ BOOSTER_ROLE_ID = 1463961292392890410
 
 ALLOWED_ROLES = [ADMIN_ROLE_ID, MOD_ROLE_ID, BOOSTER_ROLE_ID]
 
-# ----------------------------
+# ---------------------------- 
 # Assignable Team Roles
 # ----------------------------
 TEAM_ROLES = {
@@ -35,6 +48,7 @@ TEAM_ROLES = {
     "Muplims": 1469010352258682922,
     "Herd": 1464642955058086187,
     "Baddies": 1464888310877917299,
+    "Waiters": 1471208583965442287,
     "Toys": 1467124052010205258,
     "Alleyway": 1469168105988296880,
     "Phantom": 1469336418638758050,
@@ -42,15 +56,12 @@ TEAM_ROLES = {
     "Lemons": 1470553205980135572
 }
 
-# ----------------------------
-# Helper function: check if user can assign roles
+# ---------------------------- 
+# Helper functions
 # ----------------------------
 def has_permission(member):
     return any(role.id in ALLOWED_ROLES for role in member.roles)
 
-# ----------------------------
-# Helper function: normalize role names
-# ----------------------------
 def normalize_role_name(name):
     return name.replace("'", "").strip().lower()
 
@@ -61,12 +72,11 @@ def find_role_id(name):
             return role_id
     return None
 
-# ----------------------------
+# ---------------------------- 
 # Commands
 # ----------------------------
 @bot.command(name="assign", aliases=["add"])
 async def assign_role(ctx, member: discord.Member, *, role_name: str):
-    """Assign a team role to a member."""
     if not has_permission(ctx.author):
         await ctx.send("❌ You do not have permission to assign roles.")
         return
@@ -86,7 +96,6 @@ async def assign_role(ctx, member: discord.Member, *, role_name: str):
 
 @bot.command(name="remove", aliases=["rm"])
 async def remove_role(ctx, member: discord.Member, *, role_name: str):
-    """Remove a team role from a member."""
     if not has_permission(ctx.author):
         await ctx.send("❌ You do not have permission to remove roles.")
         return
@@ -104,7 +113,7 @@ async def remove_role(ctx, member: discord.Member, *, role_name: str):
     await member.remove_roles(role)
     await ctx.send(f"✅ {ctx.author.mention} removed `{role_name}` from {member.mention}.")
 
-# ----------------------------
+# ---------------------------- 
 # Help command
 # ----------------------------
 @bot.command(name="mybothelp")
@@ -117,7 +126,7 @@ async def mybot_help(ctx):
     msg += "- `!remove @member <TeamRole>` or `!rm @member <TeamRole>` — Remove a team role"
     await ctx.send(msg)
 
-# ----------------------------
+# ---------------------------- 
 # Run bot
 # ----------------------------
 bot.run(TOKEN)
