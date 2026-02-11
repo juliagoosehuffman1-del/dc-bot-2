@@ -1,156 +1,97 @@
-import os
-TOKEN = os.getenv("DISCORD_TOKEN")
-
+import discord
 from discord.ext import commands
-from flask import Flask
-from threading import Thread
+import os  # Needed to access environment variables
 
-# ================= KEEP-ALIVE SERVER =================
-app = Flask("")
+# ----------------------------
+# Setup
+# ----------------------------
+TOKEN = os.getenv("DISCORD_TOKEN")  # Railway injects this automatically
 
-@app.route("/")
-def home():
-    return "Bot is alive!"
-
-def run():
-    app.run(host="0.0.0.0", port=8080)
-
-def keep_alive():
-    Thread(target=run).start()
-
-# ================= INTENTS =================
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
+intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# ================= NORMALIZATION =================
-def normalize_role_name(name: str) -> str:
-    # lowercase, strip spaces & punctuation
-    return "".join(c for c in name.lower() if c.isalnum())
+# ----------------------------
+# Config
+# ----------------------------
+BOOSTER_ROLE_NAME = "Booster"
+ADMIN_ROLE_NAME = "Admin"
 
-# ================= ROLE SETTINGS =================
-RAW_ROLE_IDS = {
-    "Lime's Lemons": 1470553205980135572,
-    "Lime's": 1470553205980135572,  # only keep if this is INTENTIONALLY the same role
-    "The Muplims": 1469010352258682922,
-    "Joojoo's Gooner's": 1464013516943130698,
-    "Phantom Goose": 1469336418638758050,
-    "Bunnie's Herd": 1464642955058086187,
-    "Baddies": 1464888310877917299,
-    "Doll's Toys": 1467124052010205258,
-    "Alleyway Royalty": 1469168105988296880,
-    "Dumdum's Chosen Bimbo's": 1469362745911545926,
-}
+# ----------------------------
+# Events
+# ----------------------------
 
-ROLE_IDS = {normalize_role_name(name): role_id for name, role_id in RAW_ROLE_IDS.items()}
-
-BOOSTER_ROLE_ID = 1463961292392890410
-LOG_CHANNEL_ID = 1469398064727986186
-
-# ================= BOT TOKEN =================
-TOKEN = "INSERT_YOUR_TOKEN_HERE"
-
-
-# ================= READY =================
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"{bot.user} is online!")
 
-# ================= LOGGING =================
-async def log_role_change(guild, actor, target, role, action):
-    channel = guild.get_channel(LOG_CHANNEL_ID)
-    if not channel:
-        return
+@bot.event
+async def on_member_update(before, after):
+    # Handle booster role addition
+    if before.premium_since is None and after.premium_since is not None:
+        guild = after.guild
+        role = discord.utils.get(guild.roles, name=BOOSTER_ROLE_NAME)
+        if role:
+            try:
+                await after.add_roles(role)
+                print(f"Added {BOOSTER_ROLE_NAME} to {after.name}")
+            except Exception as e:
+                print(f"Error adding role: {e}")
 
-    embed = discord.Embed(
-        title="Role Change Log",
-        color=discord.Color.blurple()
-    )
-    embed.add_field(name="Action", value=action, inline=True)
-    embed.add_field(name="Role", value=role.mention, inline=True)
-    embed.add_field(name="Target", value=target.mention, inline=False)
-    embed.add_field(name="By", value=actor.mention, inline=False)
+    # Handle booster role removal if boost stops (optional)
+    if before.premium_since is not None and after.premium_since is None:
+        guild = after.guild
+        role = discord.utils.get(guild.roles, name=BOOSTER_ROLE_NAME)
+        if role:
+            try:
+                await after.remove_roles(role)
+                print(f"Removed {BOOSTER_ROLE_NAME} from {after.name}")
+            except Exception as e:
+                print(f"Error removing role: {e}")
 
-    await channel.send(embed=embed)
-
-# ================= COMMANDS =================
-@bot.command()
-async def roles(ctx):
-    role_list = "\n".join(f"• {name}" for name in RAW_ROLE_IDS.keys())
-    await ctx.send(
-        f"**Available roles:**\n{role_list}\n\n"
-        f"Use `!add <role>` or `!remove <role>`\n"
-        f"Mods / Boosters may target others with `@user`"
-    )
-
-@bot.command()
-async def add(ctx, *, role_name: str):
-    member = ctx.message.mentions[0] if ctx.message.mentions else None
-    target = member or ctx.author
-
-    normalized = normalize_role_name(role_name.replace(f"<@{target.id}>", "").strip())
-    role_id = ROLE_IDS.get(normalized)
-
-    if not role_id:
-        await ctx.send("❌ That role does not exist.")
-        return
-
-    role = ctx.guild.get_role(role_id)
-    if not role:
-        await ctx.send("❌ I can’t find that role in this server.")
-        return
-
-    if role >= ctx.guild.me.top_role:
-        await ctx.send("❌ That role is higher than my permissions.")
-        return
-
-    if target != ctx.author:
-        is_mod = ctx.author.guild_permissions.manage_roles
-        is_booster = discord.utils.get(ctx.author.roles, id=BOOSTER_ROLE_ID)
-        if not (is_mod or is_booster):
-            await ctx.send("❌ You can only assign roles to yourself.")
-            return
-
-    await target.add_roles(role)
-    await ctx.send(f"✅ Added **{role.name}** to **{target.display_name}**")
-    await log_role_change(ctx.guild, ctx.author, target, role, "ADD")
+# ----------------------------
+# Commands
+# ----------------------------
 
 @bot.command()
-async def remove(ctx, *, role_name: str):
-    member = ctx.message.mentions[0] if ctx.message.mentions else None
-    target = member or ctx.author
+async def ping(ctx):
+    await ctx.send("Pong!")
 
-    normalized = normalize_role_name(role_name.replace(f"<@{target.id}>", "").strip())
-    role_id = ROLE_IDS.get(normalized)
-
-    if not role_id:
-        await ctx.send("❌ That role does not exist.")
+@bot.command()
+async def addrole(ctx, member: discord.Member, role_name: str):
+    """Admin command to manually add a role"""
+    admin_role = discord.utils.get(ctx.guild.roles, name=ADMIN_ROLE_NAME)
+    if admin_role not in ctx.author.roles:
+        await ctx.send("You do not have permission to use this.")
         return
 
-    role = ctx.guild.get_role(role_id)
-    if not role:
-        await ctx.send("❌ I can’t find that role in this server.")
+    role = discord.utils.get(ctx.guild.roles, name=role_name)
+    if role:
+        await member.add_roles(role)
+        await ctx.send(f"Added {role_name} to {member.display_name}")
+    else:
+        await ctx.send(f"Role `{role_name}` not found.")
+
+@bot.command()
+async def removerole(ctx, member: discord.Member, role_name: str):
+    """Admin command to manually remove a role"""
+    admin_role = discord.utils.get(ctx.guild.roles, name=ADMIN_ROLE_NAME)
+    if admin_role not in ctx.author.roles:
+        await ctx.send("You do not have permission to use this.")
         return
 
-    if role >= ctx.guild.me.top_role:
-        await ctx.send("❌ That role is higher than my permissions.")
-        return
+    role = discord.utils.get(ctx.guild.roles, name=role_name)
+    if role:
+        await member.remove_roles(role)
+        await ctx.send(f"Removed {role_name} from {member.display_name}")
+    else:
+        await ctx.send(f"Role `{role_name}` not found.")
 
-    if target != ctx.author:
-        is_mod = ctx.author.guild_permissions.manage_roles
-        is_booster = discord.utils.get(ctx.author.roles, id=BOOSTER_ROLE_ID)
-        if not (is_mod or is_booster):
-            await ctx.send("❌ You can only remove roles from yourself.")
-            return
+# ----------------------------
+# Run Bot
+# ----------------------------
 
-    await target.remove_roles(role)
-    await ctx.send(f"✅ Removed **{role.name}** from **{target.display_name}**")
-    await log_role_change(ctx.guild, ctx.author, target, role, "REMOVE")
-
-# ================= START =================
-keep_alive()
-TOKEN = "INSERT_YOUR_TOKEN_HERE"
-
-
+bot.run(TOKEN)
