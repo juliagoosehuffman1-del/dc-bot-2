@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands
-import os  # Needed to access environment variables
+import os
 
 # ----------------------------
 # Setup
 # ----------------------------
-TOKEN = os.getenv("DISCORD_TOKEN")  # Railway injects this automatically
+TOKEN = os.getenv("DISCORD_TOKEN")  # Railway variable
 
 intents = discord.Intents.default()
 intents.members = True
@@ -62,9 +62,11 @@ async def ping(ctx):
 
 @bot.command()
 async def addrole(ctx, member: discord.Member, role_name: str):
-    """Admin command to manually add a role"""
+    """Admin or Booster command to manually add a role"""
     admin_role = discord.utils.get(ctx.guild.roles, name=ADMIN_ROLE_NAME)
-    if admin_role not in ctx.author.roles:
+    booster_role = discord.utils.get(ctx.guild.roles, name=BOOSTER_ROLE_NAME)
+
+    if admin_role not in ctx.author.roles and booster_role not in ctx.author.roles:
         await ctx.send("You do not have permission to use this.")
         return
 
@@ -77,9 +79,11 @@ async def addrole(ctx, member: discord.Member, role_name: str):
 
 @bot.command()
 async def removerole(ctx, member: discord.Member, role_name: str):
-    """Admin command to manually remove a role"""
+    """Admin or Booster command to manually remove a role"""
     admin_role = discord.utils.get(ctx.guild.roles, name=ADMIN_ROLE_NAME)
-    if admin_role not in ctx.author.roles:
+    booster_role = discord.utils.get(ctx.guild.roles, name=BOOSTER_ROLE_NAME)
+
+    if admin_role not in ctx.author.roles and booster_role not in ctx.author.roles:
         await ctx.send("You do not have permission to use this.")
         return
 
@@ -95,3 +99,4 @@ async def removerole(ctx, member: discord.Member, role_name: str):
 # ----------------------------
 
 bot.run(TOKEN)
+
